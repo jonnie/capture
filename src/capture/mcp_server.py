@@ -22,18 +22,24 @@ def build_mcp(settings_path: str | None = None) -> MCPServer:
         instructions=(
             "Capture stores short text captures with tags. Captures are listed newest "
             "first. Use list_captures/search_captures to read, add_capture to create, and "
-            "edit_capture/archive_capture/delete_capture to modify. Tag names must come "
-            "from the configured tag list; omit tags on add_capture to let the LLM auto-tag."
+            "edit_capture/archive_capture/delete_capture to modify. Tags come from the "
+            "configured list or those already in use; omit tags on add_capture to let "
+            "the LLM auto-tag (it prefers existing tags but may coin a new general one)."
         ),
     )
 
-    def _require_tags(tags: list[str]) -> list[str]:
+    def _valid_tags() -> set[str]:
+        """Config tags plus every tag already in use (fresh reads, per spec)."""
         supported = load_settings(settings_path).tags  # fresh read, per spec
-        unknown = sorted(set(tags) - set(supported))
+        return set(supported) | set(db.distinct_tags(settings.db_path))
+
+    def _require_tags(tags: list[str]) -> list[str]:
+        valid = _valid_tags()
+        unknown = sorted(set(tags) - valid)
         if unknown:
             raise ValueError(
                 f"Unsupported tag(s): {', '.join(unknown)}. "
-                f"Supported tags: {', '.join(supported)}"
+                f"Valid tags: {', '.join(sorted(valid))}"
             )
         return list(dict.fromkeys(tags))
 
@@ -88,9 +94,10 @@ def build_mcp(settings_path: str | None = None) -> MCPServer:
 
         Args:
             content: the capture text (required, non-empty).
-            tags: optional tags from the configured tag list. If omitted, the
-                capture is auto-tagged by the LLM (or tagged 'inbox' when the
-                LLM is disabled or unreachable).
+            tags: optional tags (from the configured list or already in use).
+                If omitted, the LLM auto-tags the capture — preferring existing
+                tags but free to coin a new general one ('inbox' if the LLM is
+                disabled or unreachable).
         """
         content = content.strip()
         if not content:
@@ -98,7 +105,9 @@ def build_mcp(settings_path: str | None = None) -> MCPServer:
         if tags:
             tags = _require_tags(tags)
         else:
-            tags = [await auto_tag(content, settings_path)]
+            tags = [
+                await auto_tag(content, settings_path, db.distinct_tags(settings.db_path))
+            ]
         return db.create_capture(settings.db_path, content, tags)
 
     @mcp.tool()
@@ -112,7 +121,7 @@ def build_mcp(settings_path: str | None = None) -> MCPServer:
         Args:
             id: capture id.
             content: new content (provide at least content or tags).
-            tags: full replacement tag list (must be configured tags).
+            tags: full replacement tag list (configured tags or tags already in use).
         """
         if content is None and tags is None:
             raise ValueError("Provide content, tags, or both")

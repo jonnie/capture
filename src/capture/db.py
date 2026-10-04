@@ -163,6 +163,13 @@ def list_captures(
     return [_capture(r, tag_map.get(r["id"], [])) for r in rows]
 
 
+def distinct_tags(db_path: Path) -> list[str]:
+    """Every tag currently in use (across active and archived captures), alphabetical."""
+    with _open(db_path) as conn:
+        rows = conn.execute("SELECT DISTINCT tag FROM capture_tags ORDER BY tag").fetchall()
+    return [r["tag"] for r in rows]
+
+
 def update_capture(
     db_path: Path,
     capture_id: int,

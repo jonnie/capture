@@ -22,7 +22,9 @@ llm:
   url: http://localhost:8080/v1
   model: qwen3.8-27b
 
-# Tags the LLM may assign (and that the UI / MCP accept).
+# Default tag list. The LLM prefers these (and any tag already in use) when
+# auto-tagging, but is free to coin a new general tag when none fits; the UI
+# and MCP then accept this list plus every tag already in use.
 tags:
   - inbox
   - todo

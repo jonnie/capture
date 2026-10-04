@@ -54,23 +54,31 @@ def create_app(settings_path: str | Path | None = None) -> FastAPI:
     app.state.settings = settings
 
     def _require_tags(tags: list[str]) -> list[str]:
-        supported = load_settings(settings_path).tags  # fresh read, per spec
-        unknown = sorted(set(tags) - set(supported))
+        valid = _valid_tags()
+        unknown = sorted(set(tags) - valid)
         if unknown:
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Unsupported tag(s): {', '.join(unknown)}. "
-                    f"Supported tags: {', '.join(supported)}"
+                    f"Valid tags: {', '.join(sorted(valid))}"
                 ),
             )
         return list(dict.fromkeys(tags))
+
+    def _valid_tags() -> set[str]:
+        """Config tags plus every tag already in use (fresh reads, per spec)."""
+        supported = load_settings(settings_path).tags  # fresh read, per spec
+        return set(supported) | set(db.distinct_tags(settings.db_path))
 
     # --- API ---
 
     @app.get("/api/tags")
     async def api_tags() -> dict:
-        return {"tags": load_settings(settings_path).tags}
+        # Config tags first (config order), then any the LLM has coined, so the
+        # UI can offer every tag that is actually valid.
+        supported = load_settings(settings_path).tags
+        return {"tags": list(dict.fromkeys(supported + db.distinct_tags(settings.db_path)))}
 
     @app.get("/api/captures")
     async def api_list_captures(
@@ -95,7 +103,9 @@ def create_app(settings_path: str | Path | None = None) -> FastAPI:
         if payload.tags:
             tags = _require_tags(payload.tags)
         else:
-            tags = [await auto_tag(content, settings_path)]
+            tags = [
+                await auto_tag(content, settings_path, db.distinct_tags(settings.db_path))
+            ]
         capture = db.create_capture(settings.db_path, content, tags)
         log.info("capture %s created (tags=%s)", capture["id"], ",".join(tags))
         return capture

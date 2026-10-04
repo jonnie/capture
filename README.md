@@ -16,13 +16,16 @@ no account, no network beyond your LLM endpoint.
 - **One-keystroke capture** — press `N` (or click **New**) and a blurred
   overlay takes over. Enter adds a new line; `Ctrl/⌘+Enter` (or the Save
   button) captures. Works on desktop and mobile.
-- **LLM auto-tagging** — new captures are tagged by any
-  OpenAI-compatible chat-completions endpoint based on the capture text
-  alone. Tagging can be disabled; the capture is never blocked by the LLM
-  (failures fall back to `inbox`).
-- **Two views** — a board grouped by tag (for the visual) or a
-  chronological list with a tag filter (for the data-driven). Live search
-  across content and tags in both.
+- **LLM auto-tagging** — new captures are tagged by any OpenAI-compatible
+  chat-completions endpoint. The LLM has free rein: it prefers the default
+  tags and any tag already in use, but may coin a new *general* tag (one or
+  two words, never a sentence) when nothing fits. Tagging can be disabled;
+  the capture is never blocked by the LLM (failures fall back to `inbox`).
+- **Three views** — a board grouped by tag (for the visual), a chronological
+  list with a tag filter (for the data-driven), and a force-directed **graph**
+  that links each capture to the tag hubs it carries — click a tag to isolate
+  its cluster and see where captures interconnect. Live search across content
+  and tags in all three.
 - **Edit, archive, delete** — editing reuses the capture overlay with an
   "Editing capture" context; archiving is instant with an **Undo** toast;
   deleting asks for confirmation first.
@@ -122,15 +125,20 @@ Notes:
 | Save capture | `Ctrl/⌘+Enter` or **Save** |
 | Cancel | `Esc` or **Cancel** (warns if the draft is non-empty) |
 | Search | `/` focuses the search box; matches content *and* tags |
-| Switch view | **Board** (grouped by tag) / **List** (chronological + tag filter) |
+| Switch view | **Board** (grouped by tag) / **List** (chronological + tag filter) / **Graph** (tag-connection map) |
 | Edit | pencil icon on a card — reuses the overlay, pre-filled, shows "Editing capture" |
 | Archive | archive icon — instant, no confirmation, toast offers **Undo** for a few seconds |
 | Restore | from the *Archived* section (board) or the divider section (list) |
 | Delete | trash icon — a confirmation dialog must be accepted first |
+| Graph: hover | hover a node — captures show content, id, time and tags; tags show their capture count |
+| Graph: focus | click a tag hub to isolate its cluster and dim the rest; click empty space to clear |
+| Graph: edit | click a capture node to open the edit overlay |
+| Graph: pan/zoom | drag empty space to pan, scroll to zoom, drag a node to reposition it |
 
 Tags are multi-valued: a capture can carry several, and in the board view it
-appears under each. In the capture overlay you can pick tags manually; if
-you leave them blank (on a new capture only) the LLM assigns one.
+appears under each. In the capture overlay you can pick tags manually — the
+picker lists the configured tags plus any the LLM has already coined. If you
+leave tags blank (on a new capture only) the LLM assigns one.
 
 ## Configuration
 
@@ -163,20 +171,29 @@ tags:
 | `llm.enabled` | `yes`/`no`. When `no`, new captures without explicit tags are tagged `inbox` and no LLM call is made. |
 | `llm.url` | Base URL of an OpenAI-compatible chat-completions endpoint (a `/chat/completions` POST is made to it). |
 | `llm.model` | Model identifier. |
-| `tags` | The supported tag list. The LLM may only assign these, the UI only offers these, and the MCP/API reject anything else. **This list is re-read from the file as needed — editing it requires no restart.** |
+| `tags` | The default tag list. The LLM prefers these (and any tag already in use) but may coin a new general tag; the UI and MCP/API accept this list plus every tag already in use. **Re-read from the file as needed — editing it requires no restart.** |
 
 ## LLM auto-tagging
 
 When a capture is added **without explicit tags**, Capture calls
-`POST {llm.url}/chat/completions` with a strict classifier prompt: the model
-sees only the capture text and the configured tag list, and must answer with
-a JSON object `{"tag": "<one of the tags>"}`. `inbox` is reserved for text
-where no other tag clearly fits.
+`POST {llm.url}/chat/completions` with a classifier prompt. The model sees the
+capture text, the default tag list, and the tags already in use across your
+captures — and must answer with a JSON object `{"tag": "<tag>"}`.
+
+The LLM has free rein over the vocabulary:
+
+- **It prefers existing tags** (the defaults, then anything already in use) so
+  related captures share tags and stay consistent over time.
+- **It may coin a new tag** when nothing fits, but is told to keep it general —
+  one or two words, never a sentence or specific detail. The parser enforces
+  this: a new tag that isn't one or two short words is rejected and the capture
+  falls back to `inbox`.
+- `inbox` is for text that genuinely resists any tag.
 
 Guarantees:
 
 - **The capture is saved no matter what.** If the LLM is down, times out
-  (30 s), returns an unknown tag, or returns nothing parseable, the capture
+  (30 s), returns an unusable tag, or returns nothing parseable, the capture
   is tagged `inbox` (or the first configured tag if `inbox` isn't in the
   list). A failed LLM call is logged, never fatal.
 - **Reasoning models are supported.** The completion budget is generous
@@ -184,8 +201,8 @@ Guarantees:
   answer; the parser takes the JSON object (with a bare-word fallback).
 - **Manual tags always win.** If you (or an agent) supply tags, the LLM is
   not consulted.
-- **Tag list changes apply immediately** — the prompt is built from a fresh
-  read of `settings.yaml` on every capture.
+- **The context is always current** — the prompt is built from a fresh read of
+  `settings.yaml` *and* a fresh query of the tags in use, on every capture.
 
 ## MCP
 
@@ -216,8 +233,8 @@ Add it to any MCP-capable client. Generic config:
 | --- | --- |
 | `list_captures` | All captures, newest first. `include_archived` (default `false`), `tag` filter, `limit` (default 50, max 200). |
 | `search_captures` | `query` matches capture content **and** tag names; optional `tag` exact filter, `include_archived`, `limit`. |
-| `add_capture` | `content` (required), optional `tags`. No tags → LLM auto-tag (or `inbox` when disabled). |
-| `edit_capture` | `id`, and/or `content`, and/or `tags` (full replacement, must be configured tags). |
+| `add_capture` | `content` (required), optional `tags`. No tags → LLM auto-tag (prefers existing tags, may coin a new general one; `inbox` when disabled). |
+| `edit_capture` | `id`, and/or `content`, and/or `tags` (full replacement; configured tags or tags already in use). |
 | `archive_capture` | `id`, `archived` (default `true`) — state change only; pass `false` to restore. |
 | `delete_capture` | `id` — removes the capture from the database permanently. |
 

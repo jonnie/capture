@@ -22,6 +22,7 @@
       <div class="view-toggle" role="group" aria-label="View">
         <button id="view-board" class="active" title="Grouped by tag">Board</button>
         <button id="view-list" title="Chronological list">List</button>
+        <button id="view-graph" title="How captures connect via shared tags">Graph</button>
       </div>
       <button id="new-capture" class="btn-primary">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -33,6 +34,15 @@
   <main id="main">
     <div id="board" class="view board-view" aria-label="Captures grouped by tag"></div>
     <div id="list" class="view list-view hidden" aria-label="Capture list"></div>
+    <div id="graph" class="view graph-view hidden" aria-label="Capture graph">
+      <div class="graph-hud">
+        <span id="graph-stats" class="graph-stats"></span>
+        <span class="graph-hint">Drag nodes · scroll to zoom · click a tag to focus · click a capture to edit</span>
+      </div>
+      <canvas id="graph-canvas"></canvas>
+      <div id="graph-tooltip" class="graph-tooltip hidden"></div>
+      <div id="graph-empty" class="empty graph-empty hidden"></div>
+    </div>
   </main>
 
   <!-- capture overlay -->
