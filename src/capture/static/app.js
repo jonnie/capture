@@ -444,6 +444,7 @@ function setView(v) {
     graphStop();
     hideTooltip();
   }
+  if (v === "graph") graph.fitted = false;
   if (changed) render();
 }
 els.viewBoard.addEventListener("click", () => setView("board"));
@@ -516,8 +517,18 @@ const graph = {
   pan: null, // { sx, sy, ox, oy }
   down: null,
   moved: false,
+  anim: null, // animated zoom/pan: { from:{x,y,k}, to:{x,y,k}, t0, dur }
+  fitted: false, // initial fit-to-content already done this view session
   cache: new Map(), // stable positions across re-layouts, keyed by node
 };
+const CARD_W = 64; // capture card width (world units)
+const CARD_H = 30; // capture card height
+const CARD_R = 5; // card corner radius
+const CARD_FONT = 8.5; // snippet font size (world units)
+const CARD_TEXT_K0 = 1.7; // zoom at which card text starts fading in
+const CARD_TEXT_K1 = 2.35; // zoom at which card text is fully shown
+const ZOOM_CLICK_K = 2.6; // zoom level applied when a card is clicked
+const ZOOM_MAX = 8; // maximum zoom
 
 function graphVisible() {
   return !els.graph.classList.contains("hidden");
@@ -568,7 +579,9 @@ function buildGraph() {
       content: c.content,
       tags: c.tags,
       created_at: c.created_at,
-      r: 4 + c.tags.length * 1.5,
+      w: CARD_W,
+      h: CARD_H,
+      r: 20,
       color: tagColor(firstTag),
       x: cached ? cached.x : hub.x + (Math.random() - 0.5) * 90,
       y: cached ? cached.y : hub.y + (Math.random() - 0.5) * 90,
@@ -586,6 +599,10 @@ function buildGraph() {
   graph.hover = null;
   graph.focus = null;
   graph.t = { x: 0, y: 0, k: 1 };
+  if (!graph.fitted) {
+    graphFit(false);
+    graph.fitted = true;
+  }
 }
 
 function graphTick() {
@@ -593,6 +610,7 @@ function graphTick() {
     graph.running = false;
     return;
   }
+  stepZoomAnim();
   const nodes = graph.nodes;
   const W = els.graph.clientWidth || 800;
   const H = els.graph.clientHeight || 600;
@@ -663,7 +681,7 @@ function graphTick() {
   }
 
   graphDraw();
-  if (graph.alpha > 0.003 || graph.drag) graph.raf = requestAnimationFrame(graphTick);
+  if (graph.alpha > 0.003 || graph.drag || graph.anim) graph.raf = requestAnimationFrame(graphTick);
   else graph.running = false;
 }
 
@@ -708,20 +726,36 @@ function graphDraw() {
   for (const n of nodes) {
     const inFocus = !focus || (n.kind === "tag" ? n.tag === focus : n.tags.includes(focus));
     ctx.globalAlpha = inFocus ? 1 : 0.15;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-    ctx.fillStyle = n.color;
-    ctx.fill();
-    ctx.lineWidth = 1.5 / k;
-    ctx.strokeStyle = "rgba(8,12,18,0.55)";
-    ctx.stroke();
+    if (n.kind === "tag") {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.fillStyle = n.color;
+      ctx.fill();
+      ctx.lineWidth = 1.5 / k;
+      ctx.strokeStyle = "rgba(8,12,18,0.55)";
+      ctx.stroke();
+    } else {
+      drawCaptureCard(ctx, n, k, inFocus);
+    }
     if (n === hover || (n.kind === "tag" && n.tag === focus)) {
       ctx.globalAlpha = 1;
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, n.r + 4 / k, 0, Math.PI * 2);
       ctx.lineWidth = 2 / k;
       ctx.strokeStyle = n.kind === "tag" ? n.color : "#ffffff";
-      ctx.stroke();
+      if (n.kind === "tag") {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r + 4 / k, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.roundRect(
+          n.x - n.w / 2 - 4 / k,
+          n.y - n.h / 2 - 4 / k,
+          n.w + 8 / k,
+          n.h + 8 / k,
+          CARD_R + 4 / k,
+        );
+        ctx.stroke();
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -744,6 +778,150 @@ function graphDraw() {
     ctx.fillText(n.tag, n.x, nameY);
     ctx.globalAlpha = 1;
   }
+}
+
+function easeInOutCubic(p) {
+  return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+}
+
+function stepZoomAnim() {
+  const anim = graph.anim;
+  if (!anim) return;
+  const now = performance.now();
+  let p = (now - anim.t0) / anim.dur;
+  if (p >= 1) p = 1;
+  const e = easeInOutCubic(p);
+  graph.t.x = anim.from.x + (anim.to.x - anim.from.x) * e;
+  graph.t.y = anim.from.y + (anim.to.y - anim.from.y) * e;
+  graph.t.k = anim.from.k + (anim.to.k - anim.from.k) * e;
+  if (p >= 1) graph.anim = null;
+}
+
+function graphZoomTo(n) {
+  const W = els.graph.clientWidth || 800;
+  const H = els.graph.clientHeight || 600;
+  const k = ZOOM_CLICK_K;
+  graph.anim = {
+    from: { ...graph.t },
+    to: { x: W / 2 - n.x * k, y: H / 2 - n.y * k, k },
+    t0: performance.now(),
+    dur: 480,
+  };
+  graphStart();
+}
+
+function graphFit(animate) {
+  const nodes = graph.nodes;
+  if (!nodes.length) return;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const n of nodes) {
+    const mX = n.kind === "tag" ? n.r + 16 : n.w / 2 + 12;
+    const mT = n.kind === "tag" ? n.r + 38 : n.h / 2 + 10;
+    const mB = n.kind === "tag" ? n.r + 16 : n.h / 2 + 10;
+    minX = Math.min(minX, n.x - mX);
+    maxX = Math.max(maxX, n.x + mX);
+    minY = Math.min(minY, n.y - mT);
+    maxY = Math.max(maxY, n.y + mB);
+  }
+  const W = els.graph.clientWidth || 800;
+  const H = els.graph.clientHeight || 600;
+  const bw = Math.max(1, maxX - minX);
+  const bh = Math.max(1, maxY - minY);
+  const k = Math.min(1.3, Math.max(0.2, Math.min(W / bw, H / bh)));
+  const to = { x: W / 2 - ((minX + maxX) / 2) * k, y: H / 2 - ((minY + maxY) / 2) * k, k };
+  if (animate && graphVisible()) {
+    graph.anim = { from: { ...graph.t }, to, t0: performance.now(), dur: 420 };
+    graphStart();
+  } else {
+    graph.t = to;
+  }
+}
+
+function drawCaptureCard(ctx, n, k, inFocus) {
+  const x = n.x - n.w / 2;
+  const y = n.y - n.h / 2;
+  ctx.beginPath();
+  ctx.roundRect(x, y, n.w, n.h, CARD_R);
+  ctx.fillStyle = "#1c2430";
+  ctx.fill();
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, n.w, n.h, CARD_R);
+  ctx.clip();
+  ctx.fillStyle = n.color;
+  ctx.fillRect(x, y, 3.5, n.h);
+  ctx.restore();
+  ctx.beginPath();
+  ctx.roundRect(x, y, n.w, n.h, CARD_R);
+  ctx.lineWidth = 1.2 / k;
+  ctx.strokeStyle = "rgba(8,12,18,0.5)";
+  ctx.stroke();
+  const ta = Math.max(0, Math.min(1, (k - CARD_TEXT_K0) / (CARD_TEXT_K1 - CARD_TEXT_K0)));
+  if (ta > 0.02 && n.content) {
+    ctx.globalAlpha = (inFocus ? 1 : 0.15) * ta;
+    drawCardText(ctx, n);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawCardText(ctx, n) {
+  const fs = CARD_FONT;
+  const padL = 7;
+  const padR = 5;
+  const availW = n.w - padL - padR;
+  const lineH = fs * 1.2;
+  const maxLines = 2;
+  ctx.font = `500 ${fs}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#dfe5ee";
+  const lines = wrapText(ctx, n.content, availW, maxLines);
+  const totalH = lines.length * lineH;
+  let ty = n.y - totalH / 2 + lineH / 2;
+  for (const line of lines) {
+    ctx.fillText(line, n.x - n.w / 2 + padL, ty);
+    ty += lineH;
+  }
+}
+
+function wrapText(ctx, text, maxW, maxLines) {
+  const words = String(text)
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+  const lines = [];
+  let cur = "";
+  let truncated = false;
+  for (const w of words) {
+    const t = cur ? cur + " " + w : w;
+    if (ctx.measureText(t).width <= maxW) {
+      cur = t;
+    } else if (cur) {
+      lines.push(cur);
+      cur = w;
+      if (lines.length === maxLines) {
+        truncated = true;
+        break;
+      }
+    } else {
+      cur = w;
+    }
+  }
+  if (cur && lines.length < maxLines) lines.push(cur);
+  else if (cur && lines.length === maxLines) truncated = true;
+  if (truncated && lines.length) {
+    let last = lines[lines.length - 1];
+    const ell = "\u2026";
+    let guard = 0;
+    while (ctx.measureText(last + ell).width > maxW && last.length > 1 && guard++ < 48)
+      last = last.slice(0, -1);
+    lines[lines.length - 1] = last + ell;
+  }
+  return lines;
 }
 
 function graphStart() {
@@ -790,10 +968,15 @@ function nodeAt(wx, wy) {
   const nodes = graph.nodes;
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
-    const dx = wx - n.x;
-    const dy = wy - n.y;
-    const r = n.r + 3 / graph.t.k;
-    if (dx * dx + dy * dy <= r * r) return n;
+    if (n.kind === "tag") {
+      const dx = wx - n.x;
+      const dy = wy - n.y;
+      const r = n.r + 3 / graph.t.k;
+      if (dx * dx + dy * dy <= r * r) return n;
+    } else {
+      const pad = 2 / graph.t.k;
+      if (Math.abs(wx - n.x) <= n.w / 2 + pad && Math.abs(wy - n.y) <= n.h / 2 + pad) return n;
+    }
   }
   return null;
 }
@@ -810,7 +993,8 @@ function updateTooltip(clientX, clientY, n) {
     tt.innerHTML =
       `<p class="tt-title" style="white-space:pre-wrap">${esc(preview)}</p>` +
       `<p class="tt-sub">#${n.id} · ${relTime(n.created_at)}</p>` +
-      `<div class="tt-tags">${n.tags.map(tagChip).join("")}</div>`;
+      `<div class="tt-tags">${n.tags.map(tagChip).join("")}</div>` +
+      `<p class="tt-hint">Double-click to edit</p>`;
   } else {
     tt.innerHTML =
       `<p class="tt-title">${esc(n.tag)}</p>` +
@@ -903,8 +1087,7 @@ els.graphCanvas.addEventListener("pointerup", (e) => {
     const p = toWorld(e.clientX, e.clientY);
     const n = nodeAt(p.x, p.y);
     if (n && n.kind === "capture") {
-      const capture = state.active.find((c) => c.id === n.id);
-      if (capture) openOverlay("edit", capture);
+      graphZoomTo(n);
     } else if (n && n.kind === "tag") {
       graph.focus = graph.focus === n.tag ? null : n.tag;
       if (!graph.running) graphDraw();
@@ -915,6 +1098,15 @@ els.graphCanvas.addEventListener("pointerup", (e) => {
   }
   graph.down = null;
   void dragNode;
+});
+els.graphCanvas.addEventListener("dblclick", (e) => {
+  if (els.graphEmpty && !els.graphEmpty.classList.contains("hidden")) return;
+  const p = toWorld(e.clientX, e.clientY);
+  const n = nodeAt(p.x, p.y);
+  if (n && n.kind === "capture") {
+    const capture = state.active.find((c) => c.id === n.id);
+    if (capture) openOverlay("edit", capture);
+  }
 });
 
 els.graphCanvas.addEventListener("pointerleave", () => {
@@ -934,7 +1126,7 @@ els.graphCanvas.addEventListener(
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     const k0 = graph.t.k;
-    const k1 = Math.min(4, Math.max(0.3, k0 * Math.exp(-e.deltaY * 0.0015)));
+    const k1 = Math.min(ZOOM_MAX, Math.max(0.2, k0 * Math.exp(-e.deltaY * 0.0032)));
     graph.t.x = sx - ((sx - graph.t.x) / k0) * k1;
     graph.t.y = sy - ((sy - graph.t.y) / k0) * k1;
     graph.t.k = k1;

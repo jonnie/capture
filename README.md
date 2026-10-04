@@ -130,10 +130,11 @@ Notes:
 | Archive | archive icon — instant, no confirmation, toast offers **Undo** for a few seconds |
 | Restore | from the *Archived* section (board) or the divider section (list) |
 | Delete | trash icon — a confirmation dialog must be accepted first |
-| Graph: hover | hover a node — captures show content, id, time and tags; tags show their capture count |
+| Graph: cards | captures render as small **cards** (tag hubs stay circular); zoom in and each card shows a short truncated snippet of its content |
+| Graph: hover | hover a node — captures show content, id, time and tags (plus a *double-click to edit* hint); tags show their capture count |
 | Graph: focus | click a tag hub to isolate its cluster and dim the rest; click empty space to clear |
-| Graph: edit | click a capture node to open the edit overlay |
-| Graph: pan/zoom | drag empty space to pan, scroll to zoom, drag a node to reposition it |
+| Graph: zoom to a card | click a capture to zoom in on it while keeping its neighbours in view; **double-click** a capture to open the edit overlay |
+| Graph: pan/zoom | drag empty space to pan, scroll to zoom (snappy, up to 8×), drag a node to reposition it |
 
 Tags are multi-valued: a capture can carry several, and in the board view it
 appears under each. In the capture overlay you can pick tags manually — the
