@@ -1,0 +1,30 @@
+# Capture configuration.
+#
+# The app re-reads this file as needed (notably the supported tag list), so
+# you can add or remove tags by editing this file alone — no code changes,
+# no restart.
+
+server:
+  # Bind address. 0.0.0.0 lets other devices on your network (e.g. your
+  # phone) capture too; use 127.0.0.1 to keep it local-only.
+  host: 0.0.0.0
+  port: 8000
+
+database:
+  # SQLite file, relative to the project root (created on first run).
+  path: data/captures.db
+
+# LLM auto-tagging. Works with any OpenAI-compatible chat-completions
+# endpoint. When disabled (or unreachable) new captures are tagged `inbox`,
+# so capturing is never blocked by the LLM.
+llm:
+  enabled: yes
+  url: http://localhost:8080/v1
+  model: qwen3.8-27b
+
+# Tags the LLM may assign (and that the UI / MCP accept).
+tags:
+  - inbox
+  - todo
+  - idea
+  - urgent
