@@ -29,6 +29,9 @@ no account, no network beyond your LLM endpoint.
 - **MCP server** — the six core functions are exposed over
   [streamable HTTP](https://modelcontextprotocol.io/) at `/mcp`, so any
   MCP-capable agent can work with your captures.
+- **Runs as a service** — `capture install` installs it as a background
+  service on Linux (systemd), macOS (launchd) and Windows (Task
+  Scheduler), with auto-restart on Linux and macOS.
 - **Single-file configuration** — everything lives in `settings.yaml`,
   including the tag list, which is read from disk as needed: add a tag in
   the file and it appears in the UI, the LLM prompt and the MCP tools
@@ -50,12 +53,65 @@ capture                 # or: python -m capture
 
 Then open <http://localhost:8000>.
 
+- **In the background:** `capture install` sets up a service that starts at
+  boot/login and keeps the app running —
+  [Running as a background service](#running-as-a-background-service).
 - **From your phone:** the app binds to `0.0.0.0` by default, so on the
   same Wi-Fi open `http://<your-machine's-ip>:8000`. Set
   `server.host: 127.0.0.1` in `settings.yaml` to keep it local-only.
 - **CLI overrides:** `capture --host 127.0.0.1 --port 9000 --settings /path/to/settings.yaml`.
 
 The first run creates the SQLite database (`data/captures.db` by default).
+
+## Running as a background service
+
+`capture install` installs the app as a service that starts at boot/login and keeps
+running in the background. `capture uninstall` stops and removes it again.
+
+| Platform | What you get |
+| --- | --- |
+| **Linux (systemd)** — Ubuntu, Fedora, RHEL, Arch, openSUSE, NixOS, … | a systemd **user** service by default (no root needed); `capture install --system` installs a system-wide unit instead (runs as your user, needs root) |
+| **macOS** | a launchd **LaunchAgent** (per-user, starts at login, auto-restarts) |
+| **Windows** | a **Task Scheduler** task that runs the app at logon |
+
+```bash
+capture install                # per-user service (default; host/port from settings.yaml)
+capture install --port 9000    # override the port (--host / --settings work too)
+capture install --system       # Linux only: system-wide service (needs root)
+capture uninstall              # stop and remove the service
+```
+
+How it works:
+
+- The unit is generated with absolute paths (the interpreter you ran from, the
+  project root, `settings.yaml`), so the service behaves exactly like the CLI.
+  **Keep the repo and its venv where they are** — the unit points at them.
+- Linux units restart the app automatically on crash (`Restart=on-failure`);
+  the macOS LaunchAgent does the same via `KeepAlive`. The Windows scheduled
+  task re-runs the app at each logon but does not restart crashes — a true
+  Windows service needs a wrapper such as [NSSM](https://nssm.cc/), which this
+  tool deliberately avoids as a dependency.
+- `capture install` refuses to start if the port is already in use, so you can't
+  end up with two instances fighting over it.
+
+Logs and status:
+
+| Platform | Status | Logs |
+| --- | --- | --- |
+| Linux (user) | `systemctl --user status capture` | `journalctl --user -u capture -f` |
+| Linux (system) | `systemctl status capture` | `journalctl -u capture -f` |
+| macOS | `launchctl print gui/$(id -u)/com.capture.app` | `tail -f ~/Library/Logs/capture/capture.err.log` |
+| Windows | `schtasks /Query /TN Capture /V /FO LIST` | run the app in the foreground to see console output |
+
+Notes:
+
+- **Linux:** the user service runs inside your login session. To keep it running
+  after you log out, enable lingering with `sudo loginctl enable-linger <your-user>`
+  — the installer prints this hint when it applies.
+- **macOS:** the agent lives at `~/Library/LaunchAgents/com.capture.app.plist`;
+  log files in `~/Library/Logs/capture/` are kept after uninstall.
+- **Windows:** the task is created for the current user; no password is stored.
+
 
 ## Using the web UI
 
@@ -232,11 +288,12 @@ capture/
 ├── pyproject.toml
 ├── LICENSE                 # MIT
 ├── src/capture/
-│   ├── cli.py              # `capture` entry point (uvicorn)
+│   ├── cli.py              # `capture` CLI: run / install / uninstall
 │   ├── app.py              # FastAPI app: REST API, static UI, MCP mount
 │   ├── mcp_server.py       # the six MCP tools (streamable HTTP)
 │   ├── llm.py              # auto-tagging (JSON contract, inbox fallback)
 │   ├── db.py               # SQLite layer (WAL, capture_tags join table)
+│   ├── service.py          # background-service install (systemd/launchd/schtasks)
 │   ├── config.py           # settings.yaml loader (fresh reads for tags)
 │   └── static/             # web UI: index.html, style.css, app.js (no build step)
 └── data/captures.db        # created on first run (gitignored)
@@ -244,9 +301,9 @@ capture/
 
 ## Development
 
-No frontend build step — the UI is plain HTML/CSS/JS served by the app.
 Run with `capture` (or `python -m capture`) and reload the page after
-editing `src/capture/static/*`.
+editing `src/capture/static/*`. Background-service commands work the same
+way: `capture install` / `capture uninstall` (or `python -m capture install`).
 
 ## License
 
