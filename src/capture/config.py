@@ -42,7 +42,10 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
     """Load and validate settings from ``settings.yaml`` (fresh read)."""
     settings_path = Path(path) if path is not None else default_settings_path()
     if not settings_path.is_file():
-        raise FileNotFoundError(f"settings file not found: {settings_path}")
+        msg = f"settings file not found: {settings_path}"
+        if settings_path.name == "settings.yaml":
+            msg += " — copy the bundled example first: `cp example.settings.yaml settings.yaml`"
+        raise FileNotFoundError(msg)
     data = yaml.safe_load(settings_path.read_text()) or {}
 
     server = data.get("server") or {}

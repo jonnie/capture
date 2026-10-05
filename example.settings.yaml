@@ -1,8 +1,12 @@
 # Capture configuration.
 #
-# The app re-reads this file as needed (notably the supported tag list), so
-# you can add or remove tags by editing this file alone — no code changes,
-# no restart.
+# Copy this file to `settings.yaml` to get started:
+#
+#     cp example.settings.yaml settings.yaml
+#
+# The app re-reads `settings.yaml` as needed (notably the supported tag list),
+# so you can add or remove tags by editing it alone — no code changes, no
+# restart.
 
 server:
   # Bind address. 0.0.0.0 lets other devices on your network (e.g. your

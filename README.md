@@ -50,6 +50,7 @@ cd capture
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
+cp example.settings.yaml settings.yaml   # copy the example config
 
 capture                 # or: python -m capture
 ```
@@ -143,7 +144,10 @@ leave tags blank (on a new capture only) the LLM assigns one.
 
 ## Configuration
 
-All settings live in a single `settings.yaml` at the project root:
+All settings live in a single `settings.yaml` at the project root. The file
+is gitignored — your personal settings (host/port, LLM endpoint, tag list)
+stay out of the repo. On a fresh clone, create it from the bundled example
+(`cp example.settings.yaml settings.yaml`), then edit to taste:
 
 ```yaml
 server:
