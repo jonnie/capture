@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,8 +7,10 @@ name = "capture"
 version = "0.1.0"
 description = "Capture anything the moment it occurs to you — a local-first web capture app with LLM auto-tagging and MCP integration."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
+authors = [{ name = "Jonathan" }]
 dependencies = [
     "fastapi>=0.111",
     "uvicorn[standard]>=0.29",
@@ -16,9 +18,54 @@ dependencies = [
     "PyYAML>=6.0",
     "mcp>=2.0",
 ]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Notes",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/jonnie/capture"
+Source = "https://github.com/jonnie/capture"
+Issues = "https://github.com/jonnie/capture/issues"
+Changelog = "https://github.com/jonnie/capture/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "ruff==0.11.0",
+    "pyright==1.1.396",
+    "build==1.2.2.post1",
+    "twine==6.1.0",
+]
 
 [project.scripts]
 capture = "capture.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# The web UI is served from the package; keep it in the built distributions.
+[tool.setuptools.package-data]
+capture = ["static/*"]
+
+[tool.pyright]
+extraPaths = ["src"]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["build", "dist", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

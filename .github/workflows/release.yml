@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Verify release version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Require a stable tag matching the package and changelog
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+          tag = os.environ["RELEASE_TAG"]
+          if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag):
+              raise SystemExit("Expected a vMAJOR.MINOR.PATCH tag")
+          version = tag[1:]
+          if tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"] != version:
+              raise SystemExit("Tag and pyproject.toml versions differ")
+          if f'__version__ = "{version}"' not in Path("src/capture/__init__.py").read_text():
+              raise SystemExit("Tag and module versions differ")
+          if f"## {version} " not in Path("CHANGELOG.md").read_text():
+              raise SystemExit("CHANGELOG.md has no entry for " + version)
+          PY
+
+  checks:
+    name: Release checks
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish GitHub release
+    needs: [version, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Build distributions
+        run: |
+          python -m pip install build
+          python -m build
+      - name: Publish release with changelog notes and artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          version = os.environ["RELEASE_TAG"][1:]
+          text = Path("CHANGELOG.md").read_text()
+          m = re.search(rf"^## {re.escape(version)}[^\n]*\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+          if not m:
+              raise SystemExit("No CHANGELOG entry for " + version)
+          Path("RELEASE_NOTES.md").write_text(m.group(1).strip() + "\n")
+          PY
+          gh release create "$RELEASE_TAG" dist/*.whl dist/*.tar.gz \
+            --title "Capture $RELEASE_TAG" \
+            --notes-file RELEASE_NOTES.md \
+            --verify-tag

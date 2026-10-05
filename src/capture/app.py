@@ -1,4 +1,5 @@
 """FastAPI application: REST API for the web UI, static assets, and the MCP endpoint."""
+
 from __future__ import annotations
 
 import contextlib
@@ -103,9 +104,7 @@ def create_app(settings_path: str | Path | None = None) -> FastAPI:
         if payload.tags:
             tags = _require_tags(payload.tags)
         else:
-            tags = [
-                await auto_tag(content, settings_path, db.distinct_tags(settings.db_path))
-            ]
+            tags = [await auto_tag(content, settings_path, db.distinct_tags(settings.db_path))]
         capture = db.create_capture(settings.db_path, content, tags)
         log.info("capture %s created (tags=%s)", capture["id"], ",".join(tags))
         return capture
@@ -125,7 +124,9 @@ def create_app(settings_path: str | Path | None = None) -> FastAPI:
         if capture is None:
             raise HTTPException(status_code=404, detail="Capture not found")
         if payload.archived is not None:
-            capture = db.set_archived(settings.db_path, capture_id, payload.archived)
+            updated = db.set_archived(settings.db_path, capture_id, payload.archived)
+            if updated is not None:
+                capture = updated
         return capture
 
     @app.delete("/api/captures/{capture_id}", status_code=204)

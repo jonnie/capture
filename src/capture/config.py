@@ -5,6 +5,7 @@ Per the spec, the supported tag list is always read from the file rather than
 held in memory, so tags can be added or removed by editing the file alone —
 no code changes, no restart.
 """
+
 from __future__ import annotations
 
 import os

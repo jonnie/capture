@@ -8,6 +8,7 @@ Usage:
 
 Options shared with ``run``/``install``: --settings, --host, --port.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,9 +39,7 @@ def _common_args(suppress_defaults: bool) -> argparse.ArgumentParser:
         help="path to settings.yaml (default: <project root>/settings.yaml)",
     )
     p.add_argument("--host", default=d, metavar="HOST", help="override server.host")
-    p.add_argument(
-        "--port", type=int, default=d, metavar="PORT", help="override server.port"
-    )
+    p.add_argument("--port", type=int, default=d, metavar="PORT", help="override server.port")
     return p
 
 
@@ -91,7 +90,13 @@ def _run_app(args: argparse.Namespace) -> None:
     host = args.host or settings.host
     port = args.port or settings.port
     shown = host if host not in ("0.0.0.0", "::") else "localhost"
-    log.info("Capture available at http://%s:%d (MCP endpoint: http://%s:%d/mcp)", shown, port, shown, port)
+    log.info(
+        "Capture available at http://%s:%d (MCP endpoint: http://%s:%d/mcp)",
+        shown,
+        port,
+        shown,
+        port,
+    )
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 

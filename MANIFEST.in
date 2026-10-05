@@ -1,0 +1,21 @@
+include LICENSE README.md pyproject.toml MANIFEST.in
+include CONTRIBUTING.md SECURITY.md CHANGELOG.md example.settings.yaml
+recursive-include docs *.md
+recursive-include tests *.py
+recursive-include .github/workflows *.yml
+include .github/dependabot.yml .github/main-ruleset.json
+recursive-include src/capture/static *
+
+# Never ship local data, environments, caches, or the (gitignored) settings file.
+exclude settings.yaml
+prune data
+prune tmp
+prune .venv
+prune build
+prune dist
+prune .git
+prune .pytest_cache
+prune .ruff_cache
+prune .mypy_cache
+prune .pyright
+global-exclude __pycache__ *.py[cod] .DS_Store .env .env.* *.pem *.key

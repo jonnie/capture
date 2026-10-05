@@ -7,11 +7,13 @@ sentence or fine-grained detail. Any failure — LLM down, timeout, unparsable
 or overly specific answer — degrades to the ``inbox`` tag so a capture is
 never lost to the tagging step.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import re
+from pathlib import Path
 
 import httpx
 
@@ -39,16 +41,16 @@ _SYSTEM = (
     "- Prefer an existing tag so related captures share tags. The default "
     "tags are: {defaults}. Tags already in use: {in_use}.\n"
     "- If no existing tag fits, you may create a new one, but keep it general "
-    "and sensible — one or two lowercase words (e.g. \"travel\", \"home "
-    "office\"), never a sentence and never specific detail.\n"
-    "- Use \"inbox\" only when no tag can reasonably be determined.\n"
+    'and sensible — one or two lowercase words (e.g. "travel", "home '
+    'office"), never a sentence and never specific detail.\n'
+    '- Use "inbox" only when no tag can reasonably be determined.\n'
     "- Output no text before or after the JSON object."
 )
 
 
 async def auto_tag(
     content: str,
-    settings_path: str | None = None,
+    settings_path: str | Path | None = None,
     existing_tags: list[str] | None = None,
     timeout: float = 30.0,
 ) -> str:

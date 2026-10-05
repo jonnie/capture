@@ -15,6 +15,7 @@ All generated units use absolute paths (the running interpreter, the project
 root and ``settings.yaml``), so the service behaves exactly like running the
 CLI with the same flags.
 """
+
 from __future__ import annotations
 
 import getpass
@@ -30,9 +31,9 @@ from pathlib import Path
 
 import yaml
 
-SERVICE_NAME = "capture"   # systemd unit: capture.service
+SERVICE_NAME = "capture"  # systemd unit: capture.service
 LABEL = "com.capture.app"  # launchd label; plist file is <LABEL>.plist
-TASK_NAME = "Capture"      # Windows scheduled task name
+TASK_NAME = "Capture"  # Windows scheduled task name
 
 _DESCRIPTION = "Capture — local-first capture app"
 
@@ -46,7 +47,9 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def _run(cmd: list[str], *, sudo: bool = False, input_: bytes | None = None) -> subprocess.CompletedProcess:
+def _run(
+    cmd: list[str], *, sudo: bool = False, input_: bytes | None = None
+) -> subprocess.CompletedProcess:
     full = (["sudo"] if sudo else []) + cmd
     return subprocess.run(full, input=input_, check=True, capture_output=True, text=input_ is None)
 
@@ -66,11 +69,14 @@ def _port_in_use(host: str, port: int) -> bool:
 # unit file builders (pure — easy to test without touching the system)
 # ---------------------------------------------------------------------------
 
+
 def systemd_unit(python: str, root: str, settings: str, host: str, port: int, system: bool) -> str:
-    q = lambda p: shlex.quote(p)
+    def q(p: str) -> str:
+        return shlex.quote(p)
+
     unit = f"""[Unit]
 Description={_DESCRIPTION}
-After={'network-online.target' if system else 'network.target'}
+After={"network-online.target" if system else "network.target"}
 """
     if system:
         unit += f"User={getpass.getuser()}\n"
@@ -92,10 +98,15 @@ def launchd_plist(python: str, root: str, settings: str, host: str, port: int, l
     return {
         "Label": LABEL,
         "ProgramArguments": [
-            python, "-m", "capture",
-            "--settings", settings,
-            "--host", host,
-            "--port", str(port),
+            python,
+            "-m",
+            "capture",
+            "--settings",
+            settings,
+            "--host",
+            host,
+            "--port",
+            str(port),
         ],
         "WorkingDirectory": root,
         "RunAtLoad": True,
@@ -113,7 +124,10 @@ def windows_command(python: str, settings: str, host: str, port: int) -> str:
 # installation / removal, one section per platform
 # ---------------------------------------------------------------------------
 
-def _install_systemd(python: str, root: str, settings: str, host: str, port: int, system: bool) -> None:
+
+def _install_systemd(
+    python: str, root: str, settings: str, host: str, port: int, system: bool
+) -> None:
     unit_text = systemd_unit(python, root, settings, host, port, system)
     if system:
         need_sudo = os.geteuid() != 0
@@ -121,7 +135,10 @@ def _install_systemd(python: str, root: str, settings: str, host: str, port: int
             raise ServiceError("system-wide install requires root privileges (or sudo)")
         unit_path = Path(f"/etc/systemd/system/{SERVICE_NAME}.service")
         _run(["tee", str(unit_path)], sudo=need_sudo, input_=unit_text.encode())
-        sc = lambda *args: _run(list(args), sudo=need_sudo)
+
+        def sc(*args: str) -> None:
+            _run(list(args), sudo=need_sudo)
+
         sc("systemctl", "daemon-reload")
         sc("systemctl", "enable", "--now", f"{SERVICE_NAME}.service")
         logs = "journalctl -u capture -f" + ("" if need_sudo else " (run with sudo)")
@@ -129,7 +146,8 @@ def _install_systemd(python: str, root: str, settings: str, host: str, port: int
     else:
         unit_path = (
             Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")).expanduser()
-            / "systemd" / "user"
+            / "systemd"
+            / "user"
         )
         unit_path.mkdir(parents=True, exist_ok=True)
         unit_path = unit_path / f"{SERVICE_NAME}.service"
@@ -142,7 +160,8 @@ def _install_systemd(python: str, root: str, settings: str, host: str, port: int
         if shutil.which("loginctl"):
             r = subprocess.run(
                 ["loginctl", "enable-linger", getpass.getuser()],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if r.returncode != 0:
                 print(
@@ -152,7 +171,7 @@ def _install_systemd(python: str, root: str, settings: str, host: str, port: int
     print(f"Wrote {unit_path}")
     print(f"  status: {status}")
     print(f"  logs:   {logs}")
-    print(f"  stop:   capture uninstall")
+    print("  stop:   capture uninstall")
 
 
 def _install_macos(python: str, root: str, settings: str, host: str, port: int) -> None:
@@ -162,18 +181,22 @@ def _install_macos(python: str, root: str, settings: str, host: str, port: int) 
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     plist_path = agents_dir / f"{LABEL}.plist"
-    plist_path.write_bytes(plistlib.dumps(launchd_plist(python, root, settings, host, port, logs_dir)))
+    plist_path.write_bytes(
+        plistlib.dumps(launchd_plist(python, root, settings, host, port, logs_dir))
+    )
     print(f"Wrote {plist_path}")
 
     uid = os.getuid()
     # Re-install path: drop any existing registration first.
     subprocess.run(
         ["launchctl", "bootout", f"gui/{uid}", LABEL],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     r = subprocess.run(
         ["launchctl", "bootstrap", f"gui/{uid}", str(plist_path)],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if r.returncode != 0:
         # Older macOS without `bootstrap`.
@@ -191,7 +214,7 @@ def _install_windows(python: str, settings: str, host: str, port: int) -> None:
     _run(["schtasks", "/Run", "/TN", TASK_NAME])
     print(f"Created scheduled task `{TASK_NAME}` (runs at logon) and started it.")
     print(f"  status: schtasks /Query /TN {TASK_NAME} /V /FO LIST")
-    print(f"  stop:   capture uninstall")
+    print("  stop:   capture uninstall")
     print(
         "  note: this uses Task Scheduler (a true Windows service needs a wrapper like NSSM);\n"
         "        the task re-runs the app at each logon but does not auto-restart crashes."
@@ -201,6 +224,7 @@ def _install_windows(python: str, settings: str, host: str, port: int) -> None:
 # ---------------------------------------------------------------------------
 # public entry points (called from the CLI)
 # ---------------------------------------------------------------------------
+
 
 def install(settings_path: str | None, host: str | None, port: int | None, system: bool) -> None:
     """Install Capture as a background service on the current platform."""
@@ -244,12 +268,13 @@ def install(settings_path: str | None, host: str | None, port: int | None, syste
                     "systemd not detected — this distro is not supported automatically; "
                     "see README 'Running as a background service' for manual options"
                 )
-            print(
-                f"Installing Capture as a {'systemd system' if system else 'systemd user'} service..."
-            )
+            unit_kind = "systemd system" if system else "systemd user"
+            print(f"Installing Capture as a {unit_kind} service...")
             _install_systemd(python, root, settings_abs, host, port, system)
         else:
-            raise ServiceError(f"unsupported platform: {system_platform} — see README for manual options")
+            raise ServiceError(
+                f"unsupported platform: {system_platform} — see README for manual options"
+            )
     except subprocess.CalledProcessError as exc:
         raise ServiceError(
             f"`{' '.join(exc.cmd)}` failed: {(exc.stderr or exc.stdout or '').strip()}"
@@ -262,7 +287,9 @@ def uninstall() -> None:
     """Remove the Capture background service installed by `capture install`."""
     system_platform = platform.system()
     if system_platform == "Windows":
-        r = subprocess.run(["schtasks", "/Delete", "/F", "/TN", TASK_NAME], capture_output=True, text=True)
+        r = subprocess.run(
+            ["schtasks", "/Delete", "/F", "/TN", TASK_NAME], capture_output=True, text=True
+        )
         if r.returncode != 0:
             raise ServiceError(f"could not delete scheduled task {TASK_NAME!r}: {r.stderr.strip()}")
         print(f"Deleted scheduled task `{TASK_NAME}`.")
@@ -271,11 +298,10 @@ def uninstall() -> None:
         plist_path = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
         subprocess.run(
             ["launchctl", "bootout", f"gui/{uid}", LABEL],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
-        r = subprocess.run(
-            ["launchctl", "unload", str(plist_path)], capture_output=True, text=True
-        )
+        r = subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True, text=True)
         if r.returncode != 0 and not plist_path.exists():
             raise ServiceError("no Capture LaunchAgent found (already uninstalled?)")
         plist_path.unlink(missing_ok=True)
@@ -285,13 +311,18 @@ def uninstall() -> None:
             raise ServiceError("systemd not detected — nothing to remove via this tool")
         user_unit = (
             Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")).expanduser()
-            / "systemd" / "user" / f"{SERVICE_NAME}.service"
+            / "systemd"
+            / "user"
+            / f"{SERVICE_NAME}.service"
         )
         system_unit = Path(f"/etc/systemd/system/{SERVICE_NAME}.service")
         try:
             if system_unit.exists():
                 need_sudo = os.geteuid() != 0
-                sc = lambda *args: _run(list(args), sudo=need_sudo)
+
+                def sc(*args: str) -> None:
+                    _run(list(args), sudo=need_sudo)
+
                 sc("systemctl", "disable", "--now", f"{SERVICE_NAME}.service")
                 system_unit.unlink()
                 sc("systemctl", "daemon-reload")

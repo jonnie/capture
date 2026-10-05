@@ -3,7 +3,10 @@
 The server is mounted on the FastAPI app at ``/mcp`` (see ``app.py``) and
 operates on the same SQLite database as the web UI.
 """
+
 from __future__ import annotations
+
+from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
@@ -12,7 +15,7 @@ from .config import load_settings
 from .llm import auto_tag
 
 
-def build_mcp(settings_path: str | None = None) -> MCPServer:
+def build_mcp(settings_path: str | Path | None = None) -> MCPServer:
     settings = load_settings(settings_path)
     db.init_db(settings.db_path)
     mcp = MCPServer(
@@ -38,8 +41,7 @@ def build_mcp(settings_path: str | None = None) -> MCPServer:
         unknown = sorted(set(tags) - valid)
         if unknown:
             raise ValueError(
-                f"Unsupported tag(s): {', '.join(unknown)}. "
-                f"Valid tags: {', '.join(sorted(valid))}"
+                f"Unsupported tag(s): {', '.join(unknown)}. Valid tags: {', '.join(sorted(valid))}"
             )
         return list(dict.fromkeys(tags))
 
@@ -105,9 +107,7 @@ def build_mcp(settings_path: str | None = None) -> MCPServer:
         if tags:
             tags = _require_tags(tags)
         else:
-            tags = [
-                await auto_tag(content, settings_path, db.distinct_tags(settings.db_path))
-            ]
+            tags = [await auto_tag(content, settings_path, db.distinct_tags(settings.db_path))]
         return db.create_capture(settings.db_path, content, tags)
 
     @mcp.tool()

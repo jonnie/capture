@@ -6,6 +6,7 @@ Timestamps are ISO-8601 UTC strings, so plain string ordering works.
 The database runs in WAL mode so the web app and MCP endpoint can be
 served concurrently.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -104,7 +105,12 @@ def create_capture(db_path: Path, content: str, tags: list[str]) -> dict:
             "INSERT INTO capture_tags (capture_id, tag) VALUES (?, ?)",
             [(capture_id, tag) for tag in tags],
         )
-    return get_capture(db_path, capture_id)
+    if capture_id is None:
+        raise RuntimeError("INSERT did not return a row id")
+    created = get_capture(db_path, capture_id)
+    if created is None:
+        raise RuntimeError(f"capture {capture_id} vanished after insert")
+    return created
 
 
 def get_capture(db_path: Path, capture_id: int) -> dict | None:
