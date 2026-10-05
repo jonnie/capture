@@ -37,9 +37,10 @@
     <div id="graph" class="view graph-view hidden" aria-label="Capture graph">
       <div class="graph-hud">
         <span id="graph-stats" class="graph-stats"></span>
-        <span class="graph-hint">Drag nodes · scroll to zoom · click a capture to zoom in · double-click to edit · click a tag to focus</span>
+        <span class="graph-hint">Drag nodes · zoom with scroll or the right-side slider · click a capture to zoom in · double-click to edit · click a tag to focus</span>
       </div>
       <canvas id="graph-canvas"></canvas>
+      <input id="graph-zoom" class="graph-zoom" type="range" min="0" max="100" value="50" step="1" aria-label="Graph zoom">
       <div id="graph-tooltip" class="graph-tooltip hidden"></div>
       <div id="graph-empty" class="empty graph-empty hidden"></div>
     </div>

@@ -134,7 +134,7 @@ Notes:
 | Graph: hover | hover a node — captures show content, id, time and tags (plus a *double-click to edit* hint); tags show their capture count |
 | Graph: focus | click a tag hub to isolate its cluster and dim the rest; click empty space to clear |
 | Graph: zoom to a card | click a capture to zoom in on it while keeping its neighbours in view; **double-click** a capture to open the edit overlay |
-| Graph: pan/zoom | drag empty space to pan, scroll to zoom (snappy, up to 8×), drag a node to reposition it |
+| Graph: pan/zoom | drag empty space to pan, scroll or drag the right-side slider to zoom (0.2×–8×), drag a node to reposition it |
 
 Tags are multi-valued: a capture can carry several, and in the board view it
 appears under each. In the capture overlay you can pick tags manually — the

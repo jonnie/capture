@@ -15,6 +15,7 @@ const els = {
   graphTooltip: $("#graph-tooltip"),
   graphStats: $("#graph-stats"),
   graphEmpty: $("#graph-empty"),
+  graphZoom: $("#graph-zoom"),
   search: $("#search"),
   newBtn: $("#new-capture"),
   overlay: $("#overlay"),
@@ -519,15 +520,16 @@ const graph = {
   moved: false,
   anim: null, // animated zoom/pan: { from:{x,y,k}, to:{x,y,k}, t0, dur }
   fitted: false, // initial fit-to-content already done this view session
+  sliderDragging: false, // true while the zoom slider is being dragged
   cache: new Map(), // stable positions across re-layouts, keyed by node
 };
 const CARD_W = 64; // capture card width (world units)
-const CARD_H = 30; // capture card height
+const CARD_H = 32; // capture card height
 const CARD_R = 5; // card corner radius
-const CARD_FONT = 8.5; // snippet font size (world units)
-const CARD_TEXT_K0 = 1.7; // zoom at which card text starts fading in
-const CARD_TEXT_K1 = 2.35; // zoom at which card text is fully shown
+const CARD_FONT = 4.5; // snippet font size (world units)
+const CARD_LINES = 3; // wrapped snippet lines shown on a card
 const ZOOM_CLICK_K = 2.6; // zoom level applied when a card is clicked
+const ZOOM_MIN = 0.2; // minimum zoom
 const ZOOM_MAX = 8; // maximum zoom
 
 function graphVisible() {
@@ -735,7 +737,7 @@ function graphDraw() {
       ctx.strokeStyle = "rgba(8,12,18,0.55)";
       ctx.stroke();
     } else {
-      drawCaptureCard(ctx, n, k, inFocus);
+      drawCaptureCard(ctx, n, k);
     }
     if (n === hover || (n.kind === "tag" && n.tag === focus)) {
       ctx.globalAlpha = 1;
@@ -778,6 +780,7 @@ function graphDraw() {
     ctx.fillText(n.tag, n.x, nameY);
     ctx.globalAlpha = 1;
   }
+  syncZoomSlider();
 }
 
 function easeInOutCubic(p) {
@@ -839,8 +842,37 @@ function graphFit(animate) {
     graph.t = to;
   }
 }
+function sliderToK(v) {
+  // slider position (0..100) -> zoom, log-scaled between ZOOM_MIN and ZOOM_MAX
+  return ZOOM_MIN * Math.pow(ZOOM_MAX / ZOOM_MIN, v / 100);
+}
 
-function drawCaptureCard(ctx, n, k, inFocus) {
+function kToSlider(k) {
+  const t = Math.log(k / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN);
+  return Math.max(0, Math.min(100, t * 100));
+}
+
+function syncZoomSlider() {
+  if (els.graphZoom && !graph.sliderDragging) {
+    els.graphZoom.value = kToSlider(graph.t.k);
+  }
+}
+
+function zoomToK(k1) {
+  // zoom toward the viewport centre (used by the zoom slider)
+  const k0 = graph.t.k;
+  if (k1 === k0) return;
+  const W = els.graph.clientWidth || 800;
+  const H = els.graph.clientHeight || 600;
+  const sx = W / 2;
+  const sy = H / 2;
+  graph.t.x = sx - ((sx - graph.t.x) / k0) * k1;
+  graph.t.y = sy - ((sy - graph.t.y) / k0) * k1;
+  graph.t.k = k1;
+  graphDraw();
+}
+
+function drawCaptureCard(ctx, n, k) {
   const x = n.x - n.w / 2;
   const y = n.y - n.h / 2;
   ctx.beginPath();
@@ -859,12 +891,7 @@ function drawCaptureCard(ctx, n, k, inFocus) {
   ctx.lineWidth = 1.2 / k;
   ctx.strokeStyle = "rgba(8,12,18,0.5)";
   ctx.stroke();
-  const ta = Math.max(0, Math.min(1, (k - CARD_TEXT_K0) / (CARD_TEXT_K1 - CARD_TEXT_K0)));
-  if (ta > 0.02 && n.content) {
-    ctx.globalAlpha = (inFocus ? 1 : 0.15) * ta;
-    drawCardText(ctx, n);
-    ctx.globalAlpha = 1;
-  }
+  if (n.content) drawCardText(ctx, n);
 }
 
 function drawCardText(ctx, n) {
@@ -872,8 +899,8 @@ function drawCardText(ctx, n) {
   const padL = 7;
   const padR = 5;
   const availW = n.w - padL - padR;
-  const lineH = fs * 1.2;
-  const maxLines = 2;
+  const lineH = fs * 1.28;
+  const maxLines = CARD_LINES;
   ctx.font = `500 ${fs}px ui-sans-serif, system-ui, sans-serif`;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
@@ -943,6 +970,7 @@ function renderGraph() {
   const empty = captures.length === 0;
   els.graphEmpty.classList.toggle("hidden", !empty);
   els.graphCanvas.style.display = empty ? "none" : "block";
+  els.graphZoom.style.display = empty ? "none" : "";
   if (empty) {
     els.graphEmpty.innerHTML = state.q
       ? `<h3>No matches</h3><p>Nothing found for “${esc(state.q)}”.</p>`
@@ -1126,7 +1154,7 @@ els.graphCanvas.addEventListener(
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     const k0 = graph.t.k;
-    const k1 = Math.min(ZOOM_MAX, Math.max(0.2, k0 * Math.exp(-e.deltaY * 0.0032)));
+    const k1 = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, k0 * Math.exp(-e.deltaY * 0.0032)));
     graph.t.x = sx - ((sx - graph.t.x) / k0) * k1;
     graph.t.y = sy - ((sy - graph.t.y) / k0) * k1;
     graph.t.k = k1;
@@ -1134,6 +1162,18 @@ els.graphCanvas.addEventListener(
   },
   { passive: false },
 );
+els.graphZoom.addEventListener("input", () => {
+  zoomToK(sliderToK(parseFloat(els.graphZoom.value)));
+});
+els.graphZoom.addEventListener("pointerdown", () => {
+  graph.sliderDragging = true;
+});
+els.graphZoom.addEventListener("change", () => {
+  graph.sliderDragging = false;
+});
+window.addEventListener("pointerup", () => {
+  graph.sliderDragging = false;
+});
 
 window.addEventListener("resize", () => {
   if (!graphVisible() || !graph.nodes.length) return;

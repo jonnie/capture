@@ -472,6 +472,43 @@ main {
   padding: 0;
 }
 
+.graph-zoom {
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 176px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  z-index: 2;
+}
+.graph-zoom::-webkit-slider-runnable-track {
+  width: 4px;
+  height: 176px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  margin: 0 auto;
+}
+.graph-zoom::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-raised);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+.graph-zoom:hover::-webkit-slider-thumb {
+  background: var(--accent-strong);
+}
+
 @media (max-width: 720px) {
   .graph-hint { display: none; }
   .graph-view { height: calc(100vh - 150px); }
