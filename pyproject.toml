@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77"]
+requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -12,11 +12,11 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "Jonathan" }]
 dependencies = [
-    "fastapi>=0.111",
-    "uvicorn[standard]>=0.29",
-    "httpx>=0.27",
-    "PyYAML>=6.0",
-    "mcp>=2.0",
+    "fastapi>=0.142.2",
+    "uvicorn[standard]>=0.54.0",
+    "httpx>=0.28.1",
+    "PyYAML>=6.0.3",
+    "mcp>=2.2.0",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -41,10 +41,10 @@ Changelog = "https://github.com/jonnie/capture/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
-    "ruff==0.11.0",
-    "pyright==1.1.396",
-    "build==1.2.2.post1",
-    "twine==6.1.0",
+    "ruff==0.16.10",
+    "pyright==1.1.414",
+    "build==1.6.1",
+    "twine==7.0.0",
 ]
 
 [project.scripts]
