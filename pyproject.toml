@@ -12,11 +12,11 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "Jonathan" }]
 dependencies = [
-    "fastapi>=0.142.2",
+    "fastapi>=0.143.0",
     "uvicorn[standard]>=0.54.0",
     "httpx>=0.28.1",
     "PyYAML>=6.0.3",
-    "mcp>=2.2.0",
+    "mcp>=2.3.0",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -41,7 +41,7 @@ Changelog = "https://github.com/jonnie/capture/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
-    "ruff==0.16.10",
+    "ruff==0.17.0",
     "pyright==1.1.414",
     "build==1.6.1",
     "twine==7.0.0",
